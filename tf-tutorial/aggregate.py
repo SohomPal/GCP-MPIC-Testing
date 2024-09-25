@@ -1,5 +1,6 @@
 import subprocess
 import requests
+import json
 
 # Function to get external IP of a VM using gcloud
 def get_external_ip(vm_name, zone):
@@ -16,29 +17,31 @@ def get_external_ip(vm_name, zone):
     except Exception as e:
         return f"Error: {e}"
 
-# Function to fetch response from a given URL
+# Function to fetch response from a given URL with a 30-second timeout
 def get_response(url):
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=30)  # Set timeout to 30 seconds
         return response.text
-    except requests.RequestException as e:
-        return f"Error fetching data from {url}: {e}"
+    except requests.RequestException:
+        return None  # Return None (null in JSON) if the request fails or times out
 
 # Aggregate responses from multiple VMs
 def aggregate_responses(vm_data):
-    aggregated_responses = []
-    
+    aggregated_responses = {}
+
     for vm_name, vm_zone in vm_data.items():
         vm_ip = get_external_ip(vm_name, vm_zone)
-        
+        print(vm_ip)
+
         if "Error" in vm_ip:
-            aggregated_responses.append(f"Failed to retrieve IP for {vm_name}: {vm_ip}")
+            aggregated_responses[vm_name] = {"error": vm_ip}
         else:
             vm_url = f"http://{vm_ip}:5000"
             vm_response = get_response(vm_url)
-            aggregated_responses.append(f"VM {vm_name} ({vm_zone}) Response: {vm_response}")
+            print(vm_response)
+            aggregated_responses[vm_name] = {"zone": vm_zone, "response": vm_response}
     
-    return "\n\n".join(aggregated_responses)
+    return aggregated_responses
 
 if __name__ == "__main__":
     # Define VM names and their corresponding zones
@@ -51,6 +54,9 @@ if __name__ == "__main__":
         "flask-vm-asia-east": "asia-east1-a",
         "flask-vm-asia-southeast": "asia-southeast1-a"
     }
-    
-    # Print aggregated responses
-    print(aggregate_responses(vm_data))
+
+    # Get aggregated responses
+    aggregated_data = aggregate_responses(vm_data)
+
+    # Print the JSON output
+    print(json.dumps(aggregated_data, indent=4))  # Pretty-print the JSON
